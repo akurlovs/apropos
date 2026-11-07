@@ -1,0 +1,12 @@
+anthropic==2.6.0
+duckdb==2.0.0
+fastapi==0.162.2
+uvicorn[standard]==0.54.0
+slowapi==0.1.10
+python-dotenv==1.2.4
+certifi==2026.10.23
+# tests / evals
+pytest==9.2.0
+httpx==0.28.1
+pandas==3.1.1
+PyYAML==6.0.3

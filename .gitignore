@@ -1,0 +1,11 @@
+.env
+.venv-conda/
+__pycache__/
+*.pyc
+.pytest_cache/
+frontend/node_modules/
+frontend/dist/
+.DS_Store
+*.tmp.csv
+.claude/
+*.tsbuildinfo

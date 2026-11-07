@@ -1,0 +1,148 @@
+# Evals for /api/ask. Figures use "gt:<key>" -> tests/evals/ground_truth.py (independent pandas).
+# expected_tools: each item must be called; a nested list means "any of these".
+# not_determinable: clause ids that must appear in the response's not_determinable list.
+# must_include: each item is a regex (case-insensitive); a nested list means "any of these".
+# must_not_include: regexes that must not match the answer, checked per sentence. {AFFIRM} = only in a sentence
+#   that is not hedged (no 'whether', 'not determinable', 'can't/cannot', 'not', 'no ... record').
+# routing: true -> one of the five policy+database routing questions written to ROUTING_TEST_RESULTS.md
+
+- id: R1_maverick_q3_reporting
+  routing: true
+  question: "How much maverick spend did we have in Q3, and who does the policy say it must be flagged and reported to?"
+  routes: "Data: maverick_spend (§2.2 flags, Q3 filter or grouping). Policy: §2.2 escalation path (citation). Gap: no Cost Center owner names."
+  expected_tools: [maverick_spend]
+  figures: ["gt:maverick_q3_count", "gt:maverick_q3_eur"]
+  must_include: ["cost cent(er|re) owner", "finance controls committee"]
+  must_not_include: ["{AFFIRM}\\b(is|are|constitutes?|were) (a )?(policy )?violations?\\b", "{AFFIRM}confirmed maverick"]
+
+- id: R2_missing_approver_payment
+  routing: true
+  question: "Which invoices are missing an approver, what do they total in EUR, and have any of them already been paid?"
+  routes: "Data: missing_approval (§3.1). Policy: §3.1 'must be held and may not be paid'. Gap: payment status → clause_info."
+  expected_tools: [missing_approval, clause_info]
+  figures: ["gt:missing_appr_count", "gt:missing_appr_eur"]
+  not_determinable: ["§3.1"]
+  must_include: ["not determinable", "held"]
+  must_not_include: ["{AFFIRM}\\b(were|was|has been|have been) paid\\b", "{AFFIRM}\\bunpaid\\b"]
+
+- id: R3_vendor_status_escalation_history
+  routing: true
+  question: "Which vendors' invoices need to be escalated to Procurement Excellence, and was PharmaPrint already inactive when it invoiced us in March?"
+  routes: "Data: invoices_by_vendor_status / vendor_status (§4.1). Policy: §4.1 escalation rule. Gap: status has no effective date → present tense only."
+  expected_tools: [[invoices_by_vendor_status, vendor_status]]
+  figures: ["gt:esc_count", "gt:pharmaprint_count", "gt:crown_count"]
+  must_include: ["currently|current", "snapshot|no effective date|date unknown|not determinable"]
+  must_not_include: ["{AFFIRM}PharmaPrint was (already )?inactive in March", "{AFFIRM}was inactive when"]
+
+- id: R4_credit_notes_matching_net
+  routing: true
+  question: "Have our credit notes been matched against the original invoices, and what is our net spend after credit notes?"
+  routes: "Data: credit_notes + spend_summary (gross / credits / net). Policy: §6.1 matching rule. Gap: no original-invoice reference → clause_info."
+  expected_tools: [[credit_notes, spend_summary], clause_info]
+  figures: ["gt:gross_eur", "gt:credits_eur", "gt:net_eur"]
+  not_determinable: ["§6.1 matching"]
+  must_include: ["not determinable", "original invoice reference|original-invoice reference"]
+
+- id: R5_inv20133_tier_fx
+  routing: true
+  question: "Who had to approve INV-20133 under the approval thresholds, and which exchange rate was used to convert it to EUR?"
+  routes: "Data: approval_tier / invoice_lookup (amount_eur, fx_rate, fx_rate_date). Policy: §3 tier table + §5.1 ECB rule. Gap: approver→role mapping; Good Friday → prior fixing."
+  expected_tools: [[approval_tier, invoice_lookup]]
+  figures: ["gt:inv20133_eur", "gt:inv20133_rate"]
+  not_determinable: ["§3"]
+  must_include: ["department head", "2025-04-17|17 April|April 17"]
+
+- id: U_2_1_timing
+  question: "Were the purchase orders issued before the suppliers started work?"
+  expected_tools: [clause_info]
+  not_determinable: ["§2.1 timing"]
+  must_include: ["not determinable", "PO (issue )?date|date the PO was issued|issue date"]
+
+- id: U_2_3_blanket_po
+  question: "Are the no-PO cloud hosting invoices covered by a blanket PO?"
+  expected_tools: [maverick_spend, clause_info]
+  not_determinable: ["§2.3"]
+  must_include: ["not determinable", "flag"]
+  must_not_include: ["{AFFIRM}\\bexempt(ed)? under", "{AFFIRM}are covered by a blanket"]
+
+- id: U_4_2_due_diligence
+  question: "Did all new vendors complete due diligence before their first payment?"
+  expected_tools: [clause_info]
+  not_determinable: ["§4.2"]
+  must_include: ["not determinable", "due.diligence"]
+
+- id: U_4_3_master_data
+  question: "Were any vendor bank detail changes made without dual approval?"
+  expected_tools: [clause_info]
+  not_determinable: ["§4.3"]
+  must_include: ["not determinable"]
+
+- id: U_5_2_payment_terms
+  question: "Did we pay our suppliers within the 60-day payment terms?"
+  expected_tools: [clause_info]
+  not_determinable: ["§5.2"]
+  must_include: ["not determinable", "payment date"]
+
+- id: U_7_sod
+  question: "Did anyone approve their own purchase? Who approved INV-20004?"
+  expected_tools: [clause_info]
+  not_determinable: [["§7.1", "§7.2"]]
+  must_include: ["not determinable", "requester", "j\\.smith"]
+
+- id: U_8_1_retention
+  question: "Are our invoice records being kept for 10 years as required?"
+  expected_tools: [clause_info]
+  not_determinable: ["§8.1"]
+  must_include: ["not determinable"]
+
+- id: U_9_exceptions
+  question: "Were any of the no-PO invoices emergency purchases recorded in the Exception Register?"
+  expected_tools: [clause_info]
+  not_determinable: ["§9"]
+  must_include: ["not determinable"]
+  must_not_include: ["{AFFIRM}was an emergency", "{AFFIRM}were emergenc"]
+
+- id: P_paid
+  question: "Was INV-20010 paid?"
+  expected_tools: [clause_info]
+  must_include: ["not determinable", "payment"]
+  must_not_include: ["{AFFIRM}INV-20010 (was|has been) paid", "{AFFIRM}\\bunpaid\\b"]
+
+- id: P_pharmaprint_march
+  question: "Was PharmaPrint inactive in March 2025?"
+  expected_tools: [[vendor_status, invoices_by_vendor_status, clause_info]]
+  must_include: ["currently|current", "not determinable|no effective date|date unknown"]
+  must_not_include: ["{AFFIRM}PharmaPrint was inactive in March"]
+
+- id: O_currency_override
+  question: "How much have we been invoiced by Crown Travel Partners, in original currency?"
+  expected_tools: [spend_summary]
+  expected_settings: {report_currency: original, source: question}
+  figures: ["gt:crown_net_eur_orig", "gt:crown_net_gbp_orig", "gt:crown_net_usd_orig"]
+
+- id: O_scope_override
+  question: "What is our net spend counting only approved invoices?"
+  expected_tools: [spend_summary]
+  expected_settings: {approval_scope: approved_only, source: question}
+  figures: ["gt:approved_only_net_eur"]
+
+- id: D_total_spend
+  question: "What was our total spend in 2025?"
+  expected_tools: [spend_summary]
+  figures: ["gt:gross_eur", "gt:credits_eur", "gt:net_eur"]
+
+- id: D_top_vendor
+  question: "Which vendor did we spend the most with?"
+  expected_tools: [spend_summary]
+  figures: ["gt:top_vendor_net_eur"]
+  must_include: ["BioReagent Direct"]
+
+- id: D_both_missing
+  question: "How many invoices are missing both a PO and an approver?"
+  expected_tools: [[run_sql, invoice_lookup, maverick_spend, missing_approval]]
+  figures: ["gt:both_missing_count"]
+
+- id: X_out_of_scope
+  question: "What's a good recipe for banana bread?"
+  expected_tools: []
+  must_include: ["invoice|procurement|policy"]
