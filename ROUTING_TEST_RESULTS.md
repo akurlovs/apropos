@@ -1,6 +1,6 @@
 # Routing test results
 
-Run: 2026-11-07T11:51:50 · model `claude-sonnet-5-5` · settings: report_currency=EUR, approval_scope=all (GUI defaults) · **5/5 passed**
+Run: 2026-11-08T10:05:27 · model `claude-sonnet-5-5` · settings: report_currency=EUR, approval_scope=all (GUI defaults) · **5/5 passed**
 
 Each question needs both the **policy** (FIN-POL-014, cited via the Citations API) and the **database** (DuckDB tool calls). Expected figures come from `tests/evals/ground_truth.py` (independent pandas computation), not from the app.
 
@@ -10,7 +10,7 @@ Each question needs both the **policy** (FIN-POL-014, cited via the Citations AP
 | 2 | Which invoices are missing an approver, what do they total in EUR, and have any of them already been paid? | missing_approval, clause_info | ✅ pass |
 | 3 | Which vendors' invoices need to be escalated to Procurement Excellence, and was PharmaPrint already inactive when it invoiced us in March? | invoices_by_vendor_status, invoices_by_vendor_status, clause_info | ✅ pass |
 | 4 | Have our credit notes been matched against the original invoices, and what is our net spend after credit notes? | clause_info, spend_summary, credit_notes | ✅ pass |
-| 5 | Who had to approve INV-20133 under the approval thresholds, and which exchange rate was used to convert it to EUR? | approval_tier, invoice_lookup | ✅ pass |
+| 5 | Who had to approve INV-20133 under the approval thresholds, and which exchange rate was used to convert it to EUR? | approval_tier, invoice_lookup, clause_info | ✅ pass |
 
 ---
 
@@ -20,21 +20,33 @@ Each question needs both the **policy** (FIN-POL-014, cited via the Citations AP
 
 **Tools called (in order):** `maverick_spend`  
 **Applied settings:** `{"report_currency": "EUR", "approval_scope": "all", "source": "gui"}`  
-**Latency:** 6.8 s · **Tokens:** {"input_tokens": 1689, "output_tokens": 647, "cache_read_input_tokens": 26750, "cache_creation_input_tokens": 0}
+**Latency:** 7.2 s · **Tokens:** {"input_tokens": 1666, "output_tokens": 799, "cache_read_input_tokens": 27944, "cache_creation_input_tokens": 0}
 
 ### Answer
 
-**Q3 maverick spend:** In Q3, **7 invoices** have no PO reference on file (§2.2 flag). Together they total **EUR 300,190.32**. Each is at or above the EUR 1,000 threshold. These are flags, not confirmed violations.
+In Q3, 7 invoices have no PO reference on file (§2.2 flags). Together they come to EUR 300,190.32, converted at the ECB rate on each invoice date. These are flags, not confirmed violations.
 
-- **Recurring-service annotation:** 5 of the 7 are described as "Cloud hosting" or "Facilities services". They carry a "possible §2.3 recurring service" annotation. Blanket-PO status is not determinable from available data, so all 5 stay flagged.
-- **Cost centers:** The flagged invoices sit in CC-FIN-100 (5 invoices) and CC-COM-440 (2 invoices).
-- **Missing approver record:** INV-20123 (EUR 27,274.66) also has no approver record. It must be held per §3.1.
+**Who it goes to under the policy:** Invoices received without a valid PO reference ("maverick spend") above the EUR 1,000 threshold must be flagged to the Cost Center owner and reported quarterly to the Finance Controls Committee. The flag goes to the Cost Center owner. The quarterly report goes to the Finance Controls Committee.
 
-**Who it must go to:** Invoices received without a valid PO reference ("maverick spend") above the EUR 1,000 threshold must be flagged to the Cost Center owner and reported quarterly to the Finance Controls Committee.
+**Flagged invoices:**
 
-- **Cost Center owner names:** The data has none, so I can't say who the individuals are.
-- **Flagging and reporting:** Whether these flags were actually raised or reported is not determinable from available data. The missing records are the flagging record and the Finance Controls Committee reports.
-- **Blanket POs:** Recurring services (e.g., cloud hosting, facilities) may operate under a blanket PO, renewed annually. No blanket-PO register is available to confirm this for any of the 5 annotated invoices.
+| Invoice | Cost center | EUR equivalent | Possibly a recurring service |
+|---|---|---|---|
+| INV-20012 | CC-FIN-100 | 11,653.62 | No |
+| INV-20057 | CC-FIN-100 | 41,722.17 | Yes |
+| INV-20067 | CC-COM-440 | 92,908.70 | Yes |
+| INV-20077 | CC-COM-440 | 5,148.47 | Yes |
+| INV-20089 | CC-FIN-100 | 26,827.36 | Yes |
+| INV-20113 | CC-FIN-100 | 94,655.34 | Yes |
+| INV-20123 | CC-FIN-100 | 27,274.66 | No |
+
+- **Recurring services:** 5 of the 7 are possibly recurring services (cloud hosting or facilities) that could sit under a blanket PO. Recurring services (e.g., cloud hosting, facilities) may operate under a blanket PO, renewed annually. The invoice data cannot confirm blanket-PO coverage. All 7 therefore stay flagged.
+- **Approver on record:** INV-20123 has none, so it must be held under §3.1.
+
+**Not determinable from available data:**
+- Whether these flags were actually raised to the Cost Center owners or reported to the Finance Controls Committee.
+- Who the Cost Center owners are, because the data holds no owner names.
+- Whether any invoice falls under the §9 emergency exception.
 
 ### Not determinable (from clause registry)
 
@@ -65,6 +77,7 @@ Each question needs both the **policy** (FIN-POL-014, cited via the Citations AP
 - ✅ mentions /finance controls committee/
 - ✅ does not say /\b(is|are|constitutes?|were) (a )?(policy )?violations?\b/ (unhedged)
 - ✅ does not say /confirmed maverick/ (unhedged)
+- ✅ plain language (no system jargon)
 - ✅ no unverified figures
 
 ---
@@ -75,42 +88,45 @@ Each question needs both the **policy** (FIN-POL-014, cited via the Citations AP
 
 **Tools called (in order):** `missing_approval`, `clause_info`  
 **Applied settings:** `{"report_currency": "EUR", "approval_scope": "all", "source": "gui"}`  
-**Latency:** 8.6 s · **Tokens:** {"input_tokens": 4113, "output_tokens": 1530, "cache_read_input_tokens": 26750, "cache_creation_input_tokens": 0}
+**Latency:** 7.5 s · **Tokens:** {"input_tokens": 4113, "output_tokens": 1259, "cache_read_input_tokens": 27944, "cache_creation_input_tokens": 0}
 
 ### Answer
 
-**25 invoices lack an approver record, totalling EUR 1,057,076.74.** Invoices lacking an approver record must be held and may not be paid. Each of these is therefore "lacks approver record -> must be held per §3.1".
+**25 invoices have no approver on record, and together they total EUR 1,057,076.74.** Under §3.1, invoices lacking an approver record must be held and may not be paid. So each of these must be held.
 
-| Invoice | Date | Vendor | Cost center | Amount (EUR) |
-|---|---|---|---|---|
-| INV-20005 | 2025-03-21 | Helix Consulting AG | CC-FIN-100 | 50,827.14 |
-| INV-20015 | 2025-04-18 | MedPack Logistics BV | CC-IT-550 | 13,472.09 |
-| INV-20026 | 2025-08-27 | BioReagent Direct | CC-IT-550 | 21,317.61 |
-| INV-20031 | 2025-07-26 | MedPack Logistics BV | CC-COM-440 | 14,152.10 |
-| INV-20038 | 2025-02-13 | DataBridge Analytics Ltd | CC-OPS-330 | 20,249.63 |
-| INV-20042 | 2025-10-14 | Quanta Cloud Services | CC-COM-440 | 52,320.77 |
-| INV-20051 | 2025-06-03 | MedPack Logistics BV | CC-RND-210 | 380.92 |
-| INV-20053 | 2025-12-10 | ClinSupply Iberia S.L. | CC-FIN-100 | 102,464.89 |
-| INV-20055 | 2025-08-11 | BioReagent Direct | CC-FIN-100 | 63,722.06 |
-| INV-20056 | 2025-08-04 | PharmaPrint Studios | CC-FIN-100 | 82,190.82 |
-| INV-20058 | 2025-10-08 | Stellar Facilities Mgmt | CC-RND-210 | 43,934.49 |
-| INV-20060 | 2025-05-18 | BioReagent Direct | CC-COM-440 | 39,046.70 |
-| INV-20061 | 2025-09-16 | Labtech Solutions GmbH | CC-COM-440 | 36,787.99 |
-| INV-20073 | 2025-01-18 | ClinSupply Iberia S.L. | CC-OPS-330 | 37,031.40 |
-| INV-20078 | 2025-06-02 | Stellar Facilities Mgmt | CC-FIN-100 | 43,611.59 |
-| INV-20080 | 2025-05-15 | Stellar Facilities Mgmt | CC-COM-440 | 35,241.66 |
-| INV-20084 | 2025-06-21 | ClinSupply Iberia S.L. | CC-IT-550 | 10,402.32 |
-| INV-20087 | 2025-07-01 | Helix Consulting AG | CC-FIN-100 | 71,011.88 |
-| INV-20108 | 2025-07-26 | PharmaPrint Studios | CC-FIN-100 | 35,492.78 |
-| INV-20123 | 2025-08-20 | Labtech Solutions GmbH | CC-FIN-100 | 27,274.66 |
-| INV-20128 | 2025-04-19 | DataBridge Analytics Ltd | CC-FIN-100 | 16,082.90 |
-| INV-20129 | 2025-06-11 | DataBridge Analytics Ltd | CC-OPS-330 | 50,005.74 |
-| INV-20134 | 2025-01-14 | MedPack Logistics BV | CC-OPS-330 | 88,734.54 |
-| INV-20135 | 2025-12-18 | Helix Consulting AG | CC-FIN-100 | 84,499.63 |
-| INV-20136 | 2025-09-22 | PharmaPrint Studios | CC-RND-210 | 16,820.43 |
+**Whether any of them have been paid is not determinable from available data.** The invoice data has no payment status or payment date.
 
-- **No PO as well:** three of these also have no PO reference on file: INV-20042, INV-20123 and INV-20128. These are §2.2 flags as well.
-- **Payment status:** whether any of them have been paid is **not determinable from available data**. The missing fields are payment status and payment date. The data shows only whether an approver record exists, so I can't say whether any invoice was paid or not.
+| Invoice | Date | Vendor | EUR equivalent |
+|---|---|---|---|
+| INV-20005 | 2025-03-21 | Helix Consulting AG | 50,827.14 |
+| INV-20015 | 2025-04-18 | MedPack Logistics BV | 13,472.09 |
+| INV-20026 | 2025-08-27 | BioReagent Direct | 21,317.61 |
+| INV-20031 | 2025-07-26 | MedPack Logistics BV | 14,152.10 |
+| INV-20038 | 2025-02-13 | DataBridge Analytics Ltd | 20,249.63 |
+| INV-20042 | 2025-10-14 | Quanta Cloud Services | 52,320.77 |
+| INV-20051 | 2025-06-03 | MedPack Logistics BV | 380.92 |
+| INV-20053 | 2025-12-10 | ClinSupply Iberia S.L. | 102,464.89 |
+| INV-20055 | 2025-08-11 | BioReagent Direct | 63,722.06 |
+| INV-20056 | 2025-08-04 | PharmaPrint Studios | 82,190.82 |
+| INV-20058 | 2025-10-08 | Stellar Facilities Mgmt | 43,934.49 |
+| INV-20060 | 2025-05-18 | BioReagent Direct | 39,046.70 |
+| INV-20061 | 2025-09-16 | Labtech Solutions GmbH | 36,787.99 |
+| INV-20073 | 2025-01-18 | ClinSupply Iberia S.L. | 37,031.40 |
+| INV-20078 | 2025-06-02 | Stellar Facilities Mgmt | 43,611.59 |
+| INV-20080 | 2025-05-15 | Stellar Facilities Mgmt | 35,241.66 |
+| INV-20084 | 2025-06-21 | ClinSupply Iberia S.L. | 10,402.32 |
+| INV-20087 | 2025-07-01 | Helix Consulting AG | 71,011.88 |
+| INV-20108 | 2025-07-26 | PharmaPrint Studios | 35,492.78 |
+| INV-20123 | 2025-08-20 | Labtech Solutions GmbH | 27,274.66 |
+| INV-20128 | 2025-04-19 | DataBridge Analytics Ltd | 16,082.90 |
+| INV-20129 | 2025-06-11 | DataBridge Analytics Ltd | 50,005.74 |
+| INV-20134 | 2025-01-14 | MedPack Logistics BV | 88,734.54 |
+| INV-20135 | 2025-12-18 | Helix Consulting AG | 84,499.63 |
+| INV-20136 | 2025-09-22 | PharmaPrint Studios | 16,820.43 |
+
+Non-EUR invoices are converted to EUR at the ECB rate on the invoice date.
+
+Three of these invoices also have no PO number on file: INV-20042, INV-20123 and INV-20128. They are also §2.2 flags.
 
 ### Not determinable (from clause registry)
 
@@ -149,6 +165,7 @@ Each question needs both the **policy** (FIN-POL-014, cited via the Citations AP
 - ✅ mentions /held/
 - ✅ does not say /\b(were|was|has been|have been) paid\b/ (unhedged)
 - ✅ does not say /\bunpaid\b/ (unhedged)
+- ✅ plain language (no system jargon)
 - ✅ no unverified figures
 
 ---
@@ -159,22 +176,22 @@ Each question needs both the **policy** (FIN-POL-014, cited via the Citations AP
 
 **Tools called (in order):** `invoices_by_vendor_status`, `invoices_by_vendor_status`, `clause_info`  
 **Applied settings:** `{"report_currency": "EUR", "approval_scope": "all", "source": "gui"}`  
-**Latency:** 5.1 s · **Tokens:** {"input_tokens": 3971, "output_tokens": 583, "cache_read_input_tokens": 26750, "cache_creation_input_tokens": 0}
+**Latency:** 5.0 s · **Tokens:** {"input_tokens": 4019, "output_tokens": 608, "cache_read_input_tokens": 27944, "cache_creation_input_tokens": 0}
 
 ### Answer
 
-Two vendors currently need escalation. Invoices from vendors with status ON_HOLD or INACTIVE must be escalated to Procurement Excellence before processing.
+**Vendors to escalate:** Two vendors currently need escalation. Invoices from vendors with status ON_HOLD or INACTIVE must be escalated to Procurement Excellence before processing.
 
-| Vendor | Status now (Vendor Master snapshot, date unknown) | Invoices | Total (EUR) |
+| Vendor | Status now (Vendor Master snapshot, date unknown) | Invoices | EUR equivalent |
 |---|---|---|---|
-| Crown Travel Partners | ON_HOLD | 12 | 415,550.83 |
-| PharmaPrint Studios | INACTIVE | 17 | 1,084,833.66 |
+| Crown Travel Partners | On hold | 12 | 415,550.83 |
+| PharmaPrint Studios | Inactive | 17 | 1,084,833.66 |
 
-Together that is 29 invoices worth EUR 1,500,384.49.
+In total, 29 invoices worth EUR 1,500,384.49 need escalation.
 
-**Was PharmaPrint already inactive when it invoiced in March?** This is not determinable from available data. The Vendor Master status is a present-day snapshot. It has no effective date or status history, and the missing fields are the vendor status effective date/history and payment records. PharmaPrint Studios is currently INACTIVE (Vendor Master snapshot, date unknown). I can't say when it became inactive.
+**PharmaPrint in March:** Whether PharmaPrint was already inactive when it invoiced is not determinable from available data. The Vendor Master shows only its current status, with no effective date or status history. We can say that PharmaPrint is currently inactive, so its invoices fall under the §4.1 escalation. The data also shows no PharmaPrint invoice dated in March 2025. Its invoices fall in other months.
 
-The data also shows no PharmaPrint Studios invoices dated March 2025. Its invoices fall in other months, for example January, February and April onward. So there is no March invoice to check.
+Payment status is also not determinable from available data, because the data has no payment records.
 
 ### Not determinable (from clause registry)
 
@@ -194,11 +211,11 @@ The data also shows no PharmaPrint Studios invoices dated March 2025. Its invoic
   SELECT i.invoice_number, i.invoice_date, i.vendor_id, i.vendor_name, i.description, i.amount_original, i.currency, i.fx_rate, i.fx_rate_date, i.amount_eur, i.is_credit_note, i.cost_center, i.po_number, i.approved_by, v.status AS vendor_status_now FROM invoices_eur i JOIN vendors v USING (vendor_id) WHERE v.status IN ('INACTIVE', 'ON_HOLD') AND TRUE ORDER BY i.invoice_number
   ```
   </details>
-- `invoices_by_vendor_status` args `{"statuses": ["INACTIVE", "ON_HOLD"], "filters": {"vendor": "PharmaPrint", "date_from": "2025-03-01", "date_to": "2025-03-31"}, "report_currency": null, "approval_scope": null}` → 0 invoice IDs, 0 FX rows  
+- `invoices_by_vendor_status` args `{"statuses": ["ACTIVE", "INACTIVE", "ON_HOLD"], "filters": {"vendor": "PharmaPrint", "date_from": "2025-03-01", "date_to": "2025-03-31"}, "report_currency": null, "approval_scope": null}` → 0 invoice IDs, 0 FX rows  
   <details><summary>query</summary>
 
   ```sql
-  SELECT i.invoice_number, i.invoice_date, i.vendor_id, i.vendor_name, i.description, i.amount_original, i.currency, i.fx_rate, i.fx_rate_date, i.amount_eur, i.is_credit_note, i.cost_center, i.po_number, i.approved_by, v.status AS vendor_status_now FROM invoices_eur i JOIN vendors v USING (vendor_id) WHERE v.status IN ('INACTIVE', 'ON_HOLD') AND TRUE AND (i.vendor_id = 'PharmaPrint' OR i.vendor_name ILIKE '%PharmaPrint%') AND i.invoice_date >= '2025-03-01' AND i.invoice_date <= '2025-03-31' ORDER BY i.invoice_number
+  SELECT i.invoice_number, i.invoice_date, i.vendor_id, i.vendor_name, i.description, i.amount_original, i.currency, i.fx_rate, i.fx_rate_date, i.amount_eur, i.is_credit_note, i.cost_center, i.po_number, i.approved_by, v.status AS vendor_status_now FROM invoices_eur i JOIN vendors v USING (vendor_id) WHERE v.status IN ('ACTIVE', 'INACTIVE', 'ON_HOLD') AND TRUE AND (i.vendor_id = 'PharmaPrint' OR i.vendor_name ILIKE '%PharmaPrint%') AND i.invoice_date >= '2025-03-01' AND i.invoice_date <= '2025-03-31' ORDER BY i.invoice_number
   ```
   </details>
 - `clause_info` args `{"clause": "\u00a74.1"}` → 0 invoice IDs, 0 FX rows  
@@ -220,6 +237,7 @@ The data also shows no PharmaPrint Studios invoices dated March 2025. Its invoic
 - ✅ mentions /snapshot|no effective date|date unknown|not determinable/
 - ✅ does not say /PharmaPrint was (already )?inactive in March/ (unhedged)
 - ✅ does not say /was inactive when/ (unhedged)
+- ✅ plain language (no system jargon)
 - ✅ no unverified figures
 
 ---
@@ -230,20 +248,20 @@ The data also shows no PharmaPrint Studios invoices dated March 2025. Its invoic
 
 **Tools called (in order):** `clause_info`, `spend_summary`, `credit_notes`  
 **Applied settings:** `{"report_currency": "EUR", "approval_scope": "all", "source": "gui"}`  
-**Latency:** 4.1 s · **Tokens:** {"input_tokens": 1084, "output_tokens": 449, "cache_read_input_tokens": 26750, "cache_creation_input_tokens": 0}
+**Latency:** 4.4 s · **Tokens:** {"input_tokens": 1084, "output_tokens": 443, "cache_read_input_tokens": 27944, "cache_creation_input_tokens": 0}
 
 ### Answer
 
-**Credit note matching:** This is not determinable from available data. Policy §6.1 says negative invoice amounts must be processed as credit notes and matched against the original invoice. It also says unmatched credit notes older than 90 days are escalated to the Finance Director. The data has no original invoice reference, matching status or credit note receipt date. I have not tried to match them by vendor, amount or PO.
+**Credit note matching:** This is not determinable from available data. The policy says negative invoice amounts must be processed as credit notes and matched against the original invoice, and unmatched credit notes older than 90 days are escalated to the Finance Director. The invoice data has no original invoice reference, matching status or credit note receipt date. I haven't matched them by vendor, amount or PO.
 
 There are 2 credit notes, both from Helix Consulting AG:
-- INV-20029, dated 2025-11-13: -52,749.39 EUR.
-- INV-20096, dated 2025-10-20: -29,534.55 USD, which is -25,340.67 EUR.
+- INV-20029, dated 2025-11-13: EUR -52,749.39
+- INV-20096, dated 2025-10-20: USD -29,534.55, which is EUR -25,340.67 at the ECB rate on the invoice date
 
-**Spend (EUR, all invoices):**
-- Gross spend (138 positive invoices): 6,964,721.16 EUR
-- Credit notes (2): -78,090.06 EUR
-- **Net spend: 6,886,631.10 EUR**
+**Spend in EUR:**
+- Gross spend (138 invoices): EUR 6,964,721.16
+- Credit notes (2): EUR -78,090.06
+- **Net spend: EUR 6,886,631.10**
 
 ### Not determinable (from clause registry)
 
@@ -289,6 +307,7 @@ There are 2 credit notes, both from Helix Consulting AG:
 - ✅ figure net_eur = 6886631.1
 - ✅ mentions /not determinable/
 - ✅ mentions /original invoice reference|original-invoice reference/
+- ✅ plain language (no system jargon)
 - ✅ no unverified figures
 
 ---
@@ -297,25 +316,22 @@ There are 2 credit notes, both from Helix Consulting AG:
 
 **Expected routing:** Data: approval_tier / invoice_lookup (amount_eur, fx_rate, fx_rate_date). Policy: §3 tier table + §5.1 ECB rule. Gap: approver→role mapping; Good Friday → prior fixing.
 
-**Tools called (in order):** `approval_tier`, `invoice_lookup`  
+**Tools called (in order):** `approval_tier`, `invoice_lookup`, `clause_info`  
 **Applied settings:** `{"report_currency": "EUR", "approval_scope": "all", "source": "gui"}`  
-**Latency:** 4.9 s · **Tokens:** {"input_tokens": 908, "output_tokens": 496, "cache_read_input_tokens": 26750, "cache_creation_input_tokens": 0}
+**Latency:** 3.9 s · **Tokens:** {"input_tokens": 1405, "output_tokens": 474, "cache_read_input_tokens": 27944, "cache_creation_input_tokens": 0}
 
 ### Answer
 
-**Required approver:** INV-20133 converts to EUR 34,122.32. That falls in the policy band of 5,000.01 – 50,000, so the required approver is the **Department Head**.
+**INV-20133 needed Department Head approval.** The policy requires a Department Head for invoice values of 5,000.01 – 50,000 EUR. The invoice is USD 38,762.96, which converts to EUR 34,122.32, so it falls in that band.
 
-The record shows `approved_by` = r.okafor. Whether r.okafor holds the Department Head role is not determinable from available data. The missing field is an approver-to-role mapping.
+**Exchange rate:** The ECB rate used was 1.136 USD per 1 EUR. The policy converts invoices in other currencies at the ECB reference rate on the invoice date. The invoice is dated 18 April 2025, but the ECB publishes no rate that day. The most recent earlier rate applies, which is the one from 17 April 2025.
 
-**Exchange rate:**
-- The invoice is for USD 38,762.96 and is dated 2025-04-18.
-- The rate used was **1.136 USD per EUR**. That is the ECB fixing from **2025-04-17**, the most recent fixing before the invoice date. The invoice date falls on a weekend or TARGET holiday, so the prior fixing applies.
-- This follows policy §5.1: Invoices in other currencies are converted at the ECB reference rate on the invoice date for reporting purposes.
-- The conversion is 38,762.96 / 1.136 = EUR 34,122.32.
+The approver on record is r.okafor. Whether r.okafor holds the Department Head role is not determinable from available data, because the data does not record each approver's role.
 
 ### Not determinable (from clause registry)
 
-- **§3** Approval thresholds (required approver tier by EUR value): missing approver -> role mapping
+- **§3** Approval thresholds (required approver tier by EUR value): missing record of each approver's role
+- **§3.1** Invoices lacking an approver record must be held and may not be paid: missing payment status, payment date
 
 ### Policy citations (Citations API)
 
@@ -338,6 +354,13 @@ The record shows `approved_by` = r.okafor. Whether r.okafor holds the Department
   SELECT i.invoice_number, i.invoice_date, i.vendor_id, i.vendor_name, i.description, i.amount_original, i.currency, i.fx_rate, i.fx_rate_date, i.amount_eur, i.is_credit_note, i.cost_center, i.po_number, i.approved_by, i.quarter, v.status AS vendor_status_now, v.category AS vendor_category, (SELECT list(f.clause ORDER BY f.clause) FROM policy_flags f WHERE f.invoice_number = i.invoice_number) AS policy_flags FROM invoices_eur i JOIN vendors v USING (vendor_id) WHERE TRUE AND i.invoice_number IN ('INV-20133') ORDER BY i.invoice_number LIMIT 50
   ```
   </details>
+- `clause_info` args `{"clause": "\u00a73"}` → 0 invoice IDs, 0 FX rows  
+  <details><summary>query</summary>
+
+  ```sql
+  clause registry lookup: §3
+  ```
+  </details>
 
 ### Checks
 
@@ -347,5 +370,6 @@ The record shows `approved_by` = r.okafor. Whether r.okafor holds the Department
 - ✅ figure inv20133_eur = 34122.32
 - ✅ figure inv20133_rate = 1.136
 - ✅ mentions /department head/
-- ✅ mentions /2025-04-17|17 April|April 17/
+- ✅ mentions /2025-04-17|17 Apr(il)?\b|Apr(il)? 17/
+- ✅ plain language (no system jargon)
 - ✅ no unverified figures

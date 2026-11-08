@@ -21,6 +21,7 @@ export interface SourceFile {
 
 export interface DataSource {
   tool: string;
+  label: string;
   query: string;
   args: Record<string, unknown>;
   invoice_ids: string[];

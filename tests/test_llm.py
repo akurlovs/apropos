@@ -115,3 +115,8 @@ def test_run_sql_limits():
         tools.run_sql(ctx, "SELECT * FROM read_csv('data/invoices_2025_clean.csv')")
     out = tools.run_sql(ctx, "SELECT * FROM range(1000)")
     assert out["row_count"] == tools.RUN_SQL_ROW_LIMIT and out["truncated"]
+
+
+def test_numbers_guard_accepts_figure_from_the_question():
+    assert llm.unverified_numbers("An invoice of EUR 60,000", [{"count": 73}, "invoice of EUR 60,000?"]) == []
+    assert llm.unverified_numbers("An invoice of EUR 60,000", [{"count": 73}]) == ["60,000"]

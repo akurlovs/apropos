@@ -50,13 +50,19 @@
   expected_tools: [[approval_tier, invoice_lookup]]
   figures: ["gt:inv20133_eur", "gt:inv20133_rate"]
   not_determinable: ["§3"]
-  must_include: ["department head", "2025-04-17|17 April|April 17"]
+  must_include: ["department head", "2025-04-17|17 Apr(il)?\\b|Apr(il)? 17"]
+
+- id: P_60k_approver
+  question: "Who is allowed to approve an invoice of EUR 60,000 and how many such invoices exist?"
+  expected_tools: [[approval_tier, run_sql]]
+  figures: ["gt:fin_director_count"]
+  must_include: ["finance director"]
 
 - id: U_2_1_timing
   question: "Were the purchase orders issued before the suppliers started work?"
   expected_tools: [clause_info]
   not_determinable: ["§2.1 timing"]
-  must_include: ["not determinable", "PO (issue )?date|date the PO was issued|issue date"]
+  must_include: ["not determinable", "PO (issue )?date|issue date|(when|date).{0,40}(PO|purchase order|issued)"]
 
 - id: U_2_3_blanket_po
   question: "Are the no-PO cloud hosting invoices covered by a blanket PO?"
@@ -81,7 +87,7 @@
   question: "Did we pay our suppliers within the 60-day payment terms?"
   expected_tools: [clause_info]
   not_determinable: ["§5.2"]
-  must_include: ["not determinable", "payment date"]
+  must_include: ["not determinable", "payment date|date each invoice was paid|when .*paid"]
 
 - id: U_7_sod
   question: "Did anyone approve their own purchase? Who approved INV-20004?"

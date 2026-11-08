@@ -60,7 +60,7 @@ button.secondary { background: #eef0f3; color: var(--text); }
 .chip { font-size: 0.75em; padding: 2px 8px; border-radius: 999px; }
 .chip.nd { background: var(--nd-bg); color: var(--nd); }
 .chip.cite { background: var(--accent-soft); color: var(--accent); margin-left: 4px; }
-.chip.src { background: #e9f6ef; color: #146c43; font-family: ui-monospace, monospace; }
+.chip.src { background: #e9f6ef; color: #146c43; }
 .citations { margin-top: 8px; font-size: 0.85em; }
 .citations ul { margin: 6px 0; padding-left: 18px; }
 .lineage { margin-top: 8px; font-size: 0.85em; }

@@ -32,11 +32,11 @@ NOT_DETERMINABLE = "not determinable from available data"
 
 REGISTRY: tuple[Clause, ...] = (
     Clause("§1", "Scope (clinical trial site payments excluded, FIN-POL-021)", "none", None,
-           missing_fields=("clinical-trial-site-payment flag",),
-           caveat="No field identifies clinical trial site payments, so all invoices are assumed in scope."),
+           missing_fields=("marker for clinical trial site payments",),
+           caveat="The invoice data does not identify clinical trial site payments, so all invoices are assumed in scope."),
     Clause("§2.1", "PO required for purchases of EUR 1,000 or above", "full", "po_status",
            fields_used=("po_number", "amount_eur"),
-           caveat="Threshold applied as amount_eur >= 1,000 (converted at the ECB rate on the invoice date)."),
+           caveat="Threshold applied to the EUR equivalent: EUR 1,000 or above (converted at the ECB rate on the invoice date)."),
     Clause("§2.1 timing", "PO issued before the supplier begins work / ships goods", "none", None,
            missing_fields=("PO issue date", "work start / goods shipment date"),
            caveat="Only the presence of a PO number is known, not when it was issued.",
@@ -51,17 +51,19 @@ REGISTRY: tuple[Clause, ...] = (
     Clause("§2.3", "Recurring services may operate under a blanket PO renewed annually", "none", None,
            missing_fields=("blanket-PO register", "blanket-PO renewal dates"),
            caveat="Every PO number in the data is unique (no PO reuse), so there is no evidence of blanket POs. "
-                  "A blank po_number is still a §2.2 flag; recurring-service descriptions are only annotated."),
+                  "An invoice with no PO number is still a §2.2 flag; a recurring-service description only marks it as a "
+                  "possible blanket-PO case."),
     Clause("§3", "Approval thresholds (required approver tier by EUR value)", "partial", "approval_tier",
            fields_used=("amount_eur", "approved_by"),
-           missing_fields=("approver -> role mapping",),
-           caveat="The required tier is computed from amount_eur; whether approved_by holds that role is "
-                  "not determinable. Tiers for non-EUR invoices depend on the FX rate (fx_rate_date shown)."),
+           missing_fields=("record of each approver's role",),
+           caveat="The required approver is worked out from the invoice's EUR equivalent; whether the named approver "
+                  "holds that role is not determinable. For non-EUR invoices the required approver depends on the "
+                  "exchange rate."),
     Clause("§3.1", "Invoices lacking an approver record must be held and may not be paid", "full", "missing_approval",
            fields_used=("approved_by",),
            missing_fields=("payment status", "payment date"),
            caveat="We know whether an approver record exists, not whether the invoice was paid. "
-                  "Say 'lacks approver record -> must be held per §3.1', never 'paid'/'unpaid'."),
+                  "Say 'no approver on record, so it must be held under §3.1', never 'paid'/'unpaid'."),
     Clause("§4.1", "Payments only to ACTIVE vendors; ON_HOLD / INACTIVE -> escalate to Procurement Excellence",
            "full", "invoices_by_vendor_status",
            fields_used=("vendor_id", "vendors.status"),
@@ -75,7 +77,7 @@ REGISTRY: tuple[Clause, ...] = (
            missing_fields=("vendor master change log", "dual-approval records", "callback verification records")),
     Clause("§5.1", "EUR reporting currency; convert at ECB reference rate on the invoice date", "full", "invoice_lookup",
            fields_used=("amount_original", "currency", "fx_rate", "fx_rate_date", "amount_eur"),
-           caveat="Weekend and TARGET-holiday invoice dates use the most recent prior ECB fixing (fx_rate_date)."),
+           caveat="The ECB publishes no rate on weekends and some holidays; invoices dated then use the most recent earlier ECB rate."),
     Clause("§5.2", "60 days net payment terms; early-payment discounts > 2% need Treasury approval", "none", None,
            missing_fields=("invoice receipt date", "payment date", "payment terms", "early-payment discount"),
            aliases=("payment terms", "60 days")),
@@ -87,15 +89,15 @@ REGISTRY: tuple[Clause, ...] = (
            aliases=("6.1 matching", "credit note matching", "90 days")),
     Clause("§7.1", "Approver may not be the requester", "none", None,
            missing_fields=("requester",),
-           caveat="approved_by is known, but there is no requester field to compare it with."),
+           caveat="The approver is on record, but the data does not record who requested the purchase."),
     Clause("§7.2", "Self-approval prohibited", "none", None,
            missing_fields=("requester",),
-           caveat="approved_by is known, but there is no requester field to compare it with."),
+           caveat="The approver is on record, but the data does not record who requested the purchase."),
     Clause("§8.1", "Records retained for 10 years", "none", None,
            missing_fields=("record retention metadata",)),
     Clause("§8.2", "Traceable lineage from source to report", "design", None,
-           caveat="Met by design: every figure carries source files (SHA-256), the query/function run, "
-                  "FX rows and invoice IDs."),
+           caveat="Met by design: every figure can be traced to its source files, calculation, exchange rates and "
+                  "invoice numbers, shown under 'How this was computed'."),
     Clause("§9", "Emergency purchases: retrospective approval via the Exception Register", "none", None,
            missing_fields=("Exception Register", "emergency flag", "retrospective approval date"),
            caveat="Never infer that a purchase was an emergency.",

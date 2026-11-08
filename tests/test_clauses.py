@@ -1,3 +1,5 @@
+import re
+
 from backend import clauses, prompts, tools
 
 
@@ -34,6 +36,16 @@ def test_clause_info_marks_not_determinable():
 def test_tool_descriptions_generated_from_registry():
     d = tools.TOOLS_BY_NAME["maverick_spend"].description
     assert "§2.2" in d and "quarter" in d
+
+
+def test_every_tool_has_a_reader_facing_label():
+    assert set(tools.TOOLS_BY_NAME) <= set(tools.TOOL_LABELS)
+
+
+def test_registry_text_shown_to_readers_has_no_column_names():
+    pat = re.compile(r"amount_eur|approved_by|po_number|fx_rate|->")
+    for c in clauses.REGISTRY:
+        assert not pat.search(" ".join((c.caveat, *c.missing_fields))), c.id
 
 
 def test_system_prompt_contains_generated_table():

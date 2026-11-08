@@ -48,7 +48,14 @@ def figure_patterns(v) -> list[str]:
     return [rf"(?<![\d]){re.escape(f) if '?' not in f else f.replace('.', r'\.')}(?![\d])" for f in forms]
 
 
-HEDGE = r"\b(whether|not determinable|can't|cannot|can not|not|no record|unknown|never|won't|will not|infer)\b"
+HEDGE = r"\b(whether|not determinable|\w+n't|cannot|can not|not|no record|unknown|never|will not|infer)\b"
+
+
+# Answers are for finance readers: system vocabulary belongs in the trace, not the answer.
+JARGON = (r"`|->|\b(invoices_eur|amount_eur|amount_original|fx_rate\w*|approved_by|po_number|policy_flags|"
+          r"is_credit_note|invoice_number|cost_center|vendor_status\w*|run_sql|clause_info|spend_summary|po_status|"
+          r"maverick_spend|approval_tier|missing_approval|invoice_lookup|SQL|truncated?|row limit|schema|"
+          r"registry|database|annotat\w+|tool|tools|column|columns|query|queries)\b")
 
 
 def _any(patterns, text) -> bool:
@@ -87,6 +94,9 @@ def check(q: dict, res: dict, gt: dict) -> list[tuple[str, bool, str]]:
     for k, v in (q.get("expected_settings") or {}).items():
         got = (res.get("applied_settings") or {}).get(k)
         checks.append((f"applied_settings.{k} = {v}", got == v, str(got)))
+    if res.get("status") == "ok":
+        hits = sorted({m.group(0) for m in re.finditer(JARGON, answer, re.I)})
+        checks.append(("plain language (no system jargon)", not hits, ", ".join(hits)))
     unv = res.get("unverified_figures", [])
     checks.append(("no unverified figures", not unv, ", ".join(unv)))
     return checks

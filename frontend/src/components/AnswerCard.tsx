@@ -4,7 +4,7 @@ import type { AskResponse } from "../types";
 import { Lineage } from "./Lineage";
 
 export function AnswerCard({ r }: { r: AskResponse }) {
-  const tools = Array.from(new Set(r.data_sources.map((s) => s.tool)));
+  const sources = Array.from(new Set(r.data_sources.map((s) => s.label)));
   const a = r.applied_settings;
   return (
     <div className={`answer ${r.status === "error" ? "error" : ""}`}>
@@ -19,7 +19,7 @@ export function AnswerCard({ r }: { r: AskResponse }) {
       {r.unverified_figures.length > 0 && (
         <div className="warning">
           ⚠ Unverified figure{r.unverified_figures.length > 1 ? "s" : ""}: {r.unverified_figures.join(", ")} —
-          not found in any tool result. Treat with caution.
+          could not be traced to the invoice data or the policy. Treat with caution.
         </div>
       )}
       <div className="md">
@@ -49,10 +49,10 @@ export function AnswerCard({ r }: { r: AskResponse }) {
           </ul>
         </details>
       )}
-      {tools.length > 0 && (
+      {sources.length > 0 && (
         <div className="chips">
-          <span className="muted">Data:</span>
-          {tools.map((t) => <span className="chip src" key={t}>{t}</span>)}
+          <span className="muted">Based on:</span>
+          {sources.map((t) => <span className="chip src" key={t}>{t}</span>)}
         </div>
       )}
       <Lineage sources={r.data_sources} />

@@ -225,16 +225,18 @@ def ask(messages: list[dict], settings: tools.Settings) -> dict:
             usage_total[k] += getattr(resp.usage, k, 0) or 0
 
         if resp.stop_reason == "refusal":
-            return failure("The model declined to answer this question.", ctx, tools_called=tools_called)
+            return failure("I can't answer this question.", ctx, tools_called=tools_called)
         if resp.stop_reason == "max_tokens":
-            return failure("The answer was cut off (token limit). No partial answer is shown.", ctx,
+            return failure("The full answer would be too long to show, so no partial answer is given. "
+                           "Try asking about a specific vendor, quarter or cost center.", ctx,
                            tools_called=tools_called)
 
         convo.append({"role": "assistant", "content": resp.content})  # append-only (keeps thinking blocks valid)
         tool_uses = [b for b in resp.content if b.type == "tool_use"]
         if resp.stop_reason != "tool_use" or not tool_uses:
             answer = "".join(b.text for b in resp.content if b.type == "text").strip()
-            unverified = unverified_numbers(answer, tool_results_seen)
+            # A figure the user typed (e.g. "an invoice of EUR 60,000") may be repeated back.
+            unverified = unverified_numbers(answer, [*tool_results_seen, history[-1]["content"]])
             if unverified:
                 log.warning("unverified figures in answer: %s", unverified)
             return {
@@ -261,9 +263,10 @@ def ask(messages: list[dict], settings: tools.Settings) -> dict:
                                 "content": f"Error: {e}"})
             except Exception:  # unexpected internal failure -> no figures
                 log.exception("tool %s failed", tu.name)
-                return failure(f"An internal error occurred while running '{tu.name}'. No answer was produced.",
+                return failure("Something went wrong while retrieving the invoice data, so no answer is shown. "
+                               "Please try again.",
                                ctx, tools_called=tools_called)
         convo.append({"role": "user", "content": results})
 
-    return failure(f"The question needed more than {MAX_ITERATIONS} tool rounds, so no answer was produced. "
-                   "Try a narrower question.", ctx, tools_called=tools_called)
+    return failure("This question needed too many steps to answer reliably, so no answer is shown. "
+                   "Try splitting it into smaller questions.", ctx, tools_called=tools_called)

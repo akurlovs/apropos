@@ -20,9 +20,20 @@ from backend import clauses, db, rules
 REPORT_CURRENCIES = ("EUR", "original")
 APPROVAL_SCOPES = ("all", "approved_only")
 RUN_SQL_ROW_LIMIT = 200
+APPROVAL_TIER_LISTED = 60
 RUN_SQL_TIMEOUT_S = 5.0
 CREDIT_NOTE_TREATMENT = ("Gross spend = positive invoices; credit notes (negative invoices) reported separately; "
                          "net = gross + credit notes. Credit notes are excluded from §2.2 thresholds and §3 tiers.")
+
+
+# Reader-facing names for the source chips on an answer; the technical name stays in the trace.
+TOOL_LABELS = {
+    "spend_summary": "Spend totals", "po_status": "PO coverage", "maverick_spend": "Invoices without a PO",
+    "approval_tier": "Required approvers", "missing_approval": "Invoices without an approver",
+    "vendor_status": "Vendor status", "invoices_by_vendor_status": "Invoices by vendor status",
+    "credit_notes": "Credit notes", "invoice_lookup": "Invoice details",
+    "clause_info": "Data availability check", "run_sql": "Custom invoice lookup",
+}
 
 
 class ToolInputError(ValueError):
@@ -69,7 +80,7 @@ class ToolContext:
     def record(self, tool: str, query: str, args: dict, invoice_ids: list[str], fx_rows: list[dict],
                settings: Settings | None, note: str = "") -> None:
         self.data_sources.append({
-            "tool": tool, "query": query.strip(), "args": args,
+            "tool": tool, "label": TOOL_LABELS.get(tool, tool), "query": query.strip(), "args": args,
             "invoice_ids": invoice_ids, "fx_rows": fx_rows,
             "settings": None if settings is None else {"report_currency": settings.report_currency,
                                                        "approval_scope": settings.approval_scope},
@@ -252,7 +263,8 @@ def spend_summary(ctx: ToolContext, group_by: str = "none", filters: dict | None
                                        "reason": "no approver record (§3.1 hold)"}
     if original:
         # Cross-currency totals are always EUR, and labelled as such.
-        eur = _rows(f"""SELECT coalesce(sum(amount_eur) FILTER (WHERE NOT is_credit_note),0) AS gross,
+        eur = _rows(f"""SELECT count(*) AS invoice_count,
+                               coalesce(sum(amount_eur) FILTER (WHERE NOT is_credit_note),0) AS gross,
                                coalesce(sum(amount_eur) FILTER (WHERE is_credit_note),0) AS credit_notes,
                                coalesce(sum(amount_eur),0) AS net
                         FROM invoices_eur i WHERE {w}""", p)[0]
@@ -300,7 +312,7 @@ def po_status(ctx: ToolContext, filters: dict | None = None, report_currency: st
     with_po = [r for r in rows if r["po_number"]]
     without = [r for r in rows if not r["po_number"]]
     result = {
-        "threshold": "amount_eur >= 1,000 (§2.1), credit notes excluded",
+        "threshold": "EUR equivalent of 1,000 or above (§2.1), credit notes excluded",
         "invoices_at_or_above_threshold": len(rows),
         "with_po": {"count": len(with_po), "amount_eur": _sum_eur(with_po)},
         "without_po": {"count": len(without), "amount_eur": _sum_eur(without),
@@ -372,12 +384,17 @@ def approval_tier(ctx: ToolContext, filters: dict | None = None, report_currency
             c["amount_eur"] = round(c["amount_eur"] + r["amount_eur"], 2)
     result = {
         "tiers": "<= 5,000 Cost Center Owner; <= 50,000 Department Head; <= 250,000 Finance Director; "
-                 "above: CFO + Procurement Excellence review (on amount_eur)",
+                 "above: CFO + Procurement Excellence review (based on the EUR equivalent)",
         "counts_by_required_approver": counts,
-        "invoices": out if len(out) <= 60 else out[:60],
-        "truncated": len(out) > 60,
-        "not_determinable": "Whether approved_by actually holds the required role: no approver -> role mapping.",
+        "total_invoices": len(out),
+        "invoices_excluding_credit_notes": sum(c["count"] for c in counts.values()),
+        "invoices": out[:APPROVAL_TIER_LISTED],
+        "not_determinable": "Whether the named approver actually holds the required role: the data has no record "
+                            "of each approver's role.",
     }
+    if len(out) > APPROVAL_TIER_LISTED:
+        result["listing_note"] = (f"The first {APPROVAL_TIER_LISTED} of {len(out)} invoices are listed here. All "
+                                  f"{len(out)} invoice numbers are under 'How this was computed'.")
     ctx.mark_not_determinable(clauses.get("§3"))
     ctx.record("approval_tier", _render(sql, p), args, [r["invoice_number"] for r in rows], _fx_rows(rows), s,
                note="Compliance check: approval_scope ignored.")
@@ -490,7 +507,7 @@ def invoice_lookup(ctx: ToolContext, filters: dict | None = None, report_currenc
         r["required_approver_tier"] = rules.approval_tier(r["amount_eur"])
     result = {"count": len(rows), "invoices": rows,
               "fx_rule": clauses.get("§5.1").caveat,
-              "vendor_status_note": "vendor_status_now is the current Vendor Master snapshot (date unknown)"}
+              "vendor_status_note": "Vendor status is the current Vendor Master snapshot (date unknown)"}
     ctx.record("invoice_lookup", _render(sql, p), args, [r["invoice_number"] for r in rows], _fx_rows(rows), s)
     return result
 
@@ -556,7 +573,11 @@ def run_sql(ctx: ToolContext, sql: str) -> dict:
     ids = sorted({r["invoice_number"] for r in rows if r.get("invoice_number")})
     ctx.record("run_sql", sql, args, ids, _fx_rows(rows), None,
                note="Free-form read-only SQL (fallback). invoice_ids only listed if the query returned invoice_number.")
-    return {"columns": cols, "rows": rows, "row_count": len(rows), "truncated": truncated}
+    out = {"columns": cols, "rows": rows, "row_count": len(rows), "truncated": truncated}
+    if truncated:
+        out["listing_note"] = (f"Only the first {RUN_SQL_ROW_LIMIT} results are shown. A narrower question "
+                               "(a vendor, quarter or cost center) will show the rest.")
+    return out
 
 
 # ---------------------------------------------------------------------------- registry of LLM tools
