@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 
-DATA = Path(__file__).resolve().parents[2] / "data"
+DATA = Path(__file__).resolve().parents[1] / "fixtures"  # frozen copy, like the tests
 RECURRING = {"Cloud hosting", "Facilities services"}
 
 
@@ -91,6 +91,14 @@ def compute() -> dict:
     gt["top_vendor"] = top.index[0]
     gt["top_vendor_net_eur"] = float(top.iloc[0])
     return gt
+
+
+def scenario_2026() -> dict:
+    """Figures for tests/evals/scenario_invoices_2026.csv (EUR only, so no conversion)."""
+    d = pd.read_csv(Path(__file__).parent / "scenario_invoices_2026.csv", dtype={"amount": str})
+    d["month"] = pd.to_datetime(d["invoice_date"]).dt.month
+    return {"scen_2026_gross": float(sum(Decimal(a) for a in d.amount)),
+            "scen_2026_q3": float(sum(Decimal(a) for a in d[d.month.between(7, 9)].amount))}
 
 
 if __name__ == "__main__":

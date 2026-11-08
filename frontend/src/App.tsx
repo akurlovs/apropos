@@ -1,9 +1,10 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { ask } from "./api";
+import { ask, getStatus } from "./api";
 import { AnswerCard } from "./components/AnswerCard";
 import { ConversionTable } from "./components/ConversionTable";
+import { coverageText, DataNotices } from "./components/DataNotices";
 import { SummaryPanel } from "./components/SummaryPanel";
-import type { ChatTurn, Settings } from "./types";
+import type { ChatTurn, DataStatus, Settings } from "./types";
 
 const EXAMPLES = [
   "How much maverick spend did we have in Q3, and who must it be flagged to?",
@@ -13,8 +14,12 @@ const EXAMPLES = [
   "Who had to approve INV-20133, and which FX rate was used?",
 ];
 
+const MAX_HISTORY_SENT = 12; // the server only uses this many messages
+
 export default function App() {
-  const [settings, setSettings] = useState<Settings>({ report_currency: "EUR", approval_scope: "all" });
+  const [settings, setSettings] = useState<Settings>({ report_currency: "EUR", approval_scope: "all", year: "latest" });
+  const [status, setStatus] = useState<DataStatus | null>(null);
+  const [statusErr, setStatusErr] = useState<string | null>(null);
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -25,6 +30,10 @@ export default function App() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [turns, busy]);
 
+  useEffect(() => {
+    getStatus().then(setStatus).catch((e) => setStatusErr(String(e.message ?? e)));
+  }, []);
+
   async function send(text: string) {
     const q = text.trim();
     if (!q || busy) return;
@@ -34,14 +43,14 @@ export default function App() {
     setBusy(true);
     try {
       // Only plain text history is sent; settings come from this request (never carried over silently).
-      const r = await ask(next.map(({ role, content }) => ({ role, content })), settings);
+      const r = await ask(next.slice(-MAX_HISTORY_SENT).map(({ role, content }) => ({ role, content })), settings);
       setTurns([...next, { role: "assistant", content: r.status === "ok" ? r.answer : "", response: r }]);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setTurns([...next, {
         role: "assistant", content: "",
         response: { answer: `Request failed: ${msg}`, status: "error", applied_settings: null, data_sources: [],
-          not_determinable: [], policy_citations: [], unverified_figures: [] },
+          not_determinable: [], policy_citations: [], unverified_figures: [], answer_warnings: [], workflow: [] },
       }]);
     } finally {
       setBusy(false);
@@ -53,14 +62,43 @@ export default function App() {
     send(input);
   };
 
+  if (statusErr) {
+    return (
+      <div className="blocked">
+        <h2>The server can't be reached</h2>
+        <p>{statusErr}</p>
+        <button onClick={() => location.reload()}>Retry</button>
+      </div>
+    );
+  }
+  if (!status) return <div className="blocked muted">Loading invoice data…</div>;
+  if (status.state === "failed") {
+    return (
+      <div className="blocked">
+        <h2>{status.redesign_needed ? "The data or policy has changed" : "The data could not be loaded"}</h2>
+        <p>{status.message}</p>
+        <p className="muted">No figures are shown until this is resolved.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       <header>
         <div>
           <h1>Apropos</h1>
-          <span className="muted">2025 invoices × FIN-POL-014 v3.2 — every answer sourced</span>
+          <span className="muted">Invoices × {status.policy} — every answer sourced</span>
+          <div className="muted coverage">{coverageText(status)}</div>
         </div>
         <div className="settings">
+          <label>
+            Period
+            <select value={settings.year} onChange={(e) => setSettings({ ...settings, year: e.target.value })}>
+              <option value="latest">Latest year ({status.latest_year})</option>
+              {[...(status.years ?? [])].reverse().map((y) => <option key={y} value={String(y)}>{y}</option>)}
+              <option value="all">All years</option>
+            </select>
+          </label>
           <label>
             Report currency
             <select value={settings.report_currency}
@@ -76,6 +114,7 @@ export default function App() {
           </label>
         </div>
       </header>
+      <DataNotices st={status} />
       <main>
         <section className="chat">
           <div className="turns">
@@ -105,7 +144,7 @@ export default function App() {
             <button className={tab === "summary" ? "active" : ""} onClick={() => setTab("summary")}>Summary</button>
             <button className={tab === "invoices" ? "active" : ""} onClick={() => setTab("invoices")}>Conversion table</button>
           </div>
-          {tab === "summary" ? <SummaryPanel settings={settings} /> : <ConversionTable currency={settings.report_currency} />}
+          {tab === "summary" ? <SummaryPanel settings={settings} /> : <ConversionTable currency={settings.report_currency} year={settings.year} />}
         </aside>
       </main>
     </div>

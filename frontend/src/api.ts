@@ -1,4 +1,4 @@
-import type { AskResponse, InvoiceRow, Settings, Summary } from "./types";
+import type { AskResponse, DataStatus, InvoiceRow, Settings, Summary } from "./types";
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -14,17 +14,21 @@ async function json<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export function getSummary(s: Settings): Promise<Summary> {
-  const q = new URLSearchParams({ report_currency: s.report_currency, approval_scope: s.approval_scope });
-  return fetch(`/api/summary?${q}`).then((r) => json<Summary>(r));
+export function getStatus(): Promise<DataStatus> {
+  return fetch("/api/status").then((r) => json<DataStatus>(r));
 }
 
-export function getInvoices(currency: Settings["report_currency"]): Promise<{ rows: InvoiceRow[] }> {
-  return fetch(`/api/invoices?currency=${currency}`).then((r) => json(r));
+export function getSummary(s: Settings, signal?: AbortSignal): Promise<Summary> {
+  const q = new URLSearchParams({ report_currency: s.report_currency, approval_scope: s.approval_scope, year: s.year });
+  return fetch(`/api/summary?${q}`, { signal }).then((r) => json<Summary>(r));
 }
 
-export function csvUrl(currency: Settings["report_currency"]): string {
-  return `/api/invoices?currency=${currency}&format=csv`;
+export function getInvoices(currency: Settings["report_currency"], year: string, signal?: AbortSignal): Promise<{ rows: InvoiceRow[] }> {
+  return fetch(`/api/invoices?currency=${currency}&year=${year}`, { signal }).then((r) => json(r));
+}
+
+export function csvUrl(currency: Settings["report_currency"], year: string): string {
+  return `/api/invoices?currency=${currency}&year=${year}&format=csv`;
 }
 
 export function ask(messages: { role: string; content: string }[], settings: Settings): Promise<AskResponse> {
@@ -35,5 +39,6 @@ export function ask(messages: { role: string; content: string }[], settings: Set
   }).then((r) => json<AskResponse>(r));
 }
 
-export const fmt = (n: number, digits = 2) =>
-  n.toLocaleString("en-GB", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+// A missing amount means "no exchange rate yet": never show it as 0 or blank.
+export const fmt = (n: number | null | undefined, digits = 2) =>
+  n == null ? "pending" : n.toLocaleString("en-GB", { minimumFractionDigits: digits, maximumFractionDigits: digits });

@@ -36,8 +36,12 @@ export function SummaryPanel({ settings }: { settings: Settings }) {
   const [s, setS] = useState<Summary | null>(null);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
+    const ctl = new AbortController();
     setErr(null);
-    getSummary(settings).then(setS).catch((e) => setErr(String(e.message ?? e)));
+    getSummary(settings, ctl.signal).then(setS).catch((e) => {
+      if (e.name !== "AbortError") setErr(String(e.message ?? e));
+    });
+    return () => ctl.abort();
   }, [settings]);
   if (err) return <div className="warning">Summary failed: {err}</div>;
   if (!s) return <div className="muted">Loading summary…</div>;
@@ -46,6 +50,7 @@ export function SummaryPanel({ settings }: { settings: Settings }) {
   const eurTotal = (original ? s.total.cross_currency_total_eur : s.total.rows[0]) ?? s.total.rows[0];
   return (
     <div className="summary">
+      {s.period && <p className="period">Period: <b>{s.period}</b></p>}
       <div className="tiles">
         <div className="tile"><span>Gross spend (EUR)</span><b>{fmt(eurTotal.gross)}</b></div>
         <div className="tile"><span>Credit notes (EUR)</span><b>{fmt(eurTotal.credit_notes)}</b></div>
@@ -55,6 +60,9 @@ export function SummaryPanel({ settings }: { settings: Settings }) {
         <p className="muted">Totals above are EUR (converted at the ECB rate on the invoice date). Tables below
           show per-currency subtotals — amounts in different currencies are never added together.</p>
       )}
+      {s.total.rate_pending && (
+        <p className="warning">{s.total.rate_pending.note}</p>
+      )}
       {s.total.excluded_by_scope && (
         <p className="muted">
           Excluding {s.total.excluded_by_scope.count} invoices without approver record (§3.1 holds):{" "}
@@ -62,7 +70,7 @@ export function SummaryPanel({ settings }: { settings: Settings }) {
         </p>
       )}
       <div className="block">
-        <h4>Policy flags <span className="muted">(compliance flags always cover all invoices)</span></h4>
+        <h4>Policy flags <span className="muted">(not affected by the approver filter)</span></h4>
         <ul className="flags">
           {Object.entries(s.flags).map(([k, v]) => <li key={k}><b>{v}</b> {k}</li>)}
         </ul>

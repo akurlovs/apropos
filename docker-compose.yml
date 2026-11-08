@@ -1,0 +1,13 @@
+services:
+  apropos:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: .env        # copy .env.example to .env and add your key; it stays out of the image
+    volumes:
+      - ./data:/app/data  # add or replace CSVs here, then: docker compose restart
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s

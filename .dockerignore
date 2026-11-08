@@ -1,0 +1,11 @@
+.env
+.git
+.claude
+.venv-conda
+.pytest_cache
+**/__pycache__
+**/node_modules
+frontend/dist
+tests
+data/load_log.jsonl
+*.md

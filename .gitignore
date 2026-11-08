@@ -9,3 +9,4 @@ frontend/dist/
 *.tmp.csv
 .claude/
 *.tsbuildinfo
+data/load_log.jsonl

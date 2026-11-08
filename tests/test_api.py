@@ -50,3 +50,16 @@ def test_invoices_json_and_csv():
 
 def test_bad_settings_rejected():
     assert client.get("/api/summary?report_currency=GBP").status_code == 422
+
+
+def test_frontend_route_cannot_read_outside_the_build(tmp_path):
+    from backend.main import spa_file
+
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("app")
+    (dist / "logo.svg").write_text("x")
+    (tmp_path / ".env").write_text("secret")
+    assert spa_file(dist, "logo.svg").name == "logo.svg"
+    for path in ("../.env", "../../etc/passwd", "", "missing.js"):
+        assert spa_file(dist, path).name == "index.html"

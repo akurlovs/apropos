@@ -67,6 +67,9 @@ button.secondary { background: #eef0f3; color: var(--text); }
 .lineage summary, .citations summary { cursor: pointer; color: var(--accent); }
 .lineage-body { padding: 6px 0 0 4px; }
 .lineage .step { border-left: 3px solid var(--border); padding-left: 8px; margin: 8px 0; }
+.lineage .step.policy { border-left-color: var(--nd); }
+.step-kind { font-size: 0.75em; padding: 1px 6px; border-radius: 999px; background: #e9f6ef; color: #146c43; }
+.step-kind.policy { background: var(--nd-bg); color: var(--nd); }
 .lineage .files { margin: 4px 0; padding-left: 18px; }
 .ids { font-family: ui-monospace, monospace; font-size: 0.8em; word-break: break-word; }
 
@@ -86,6 +89,12 @@ table.small th, table.small td { border-bottom: 1px solid var(--border); padding
 .num { text-align: right !important; font-variant-numeric: tabular-nums; }
 tr.credit td { color: var(--err); }
 .missing { color: var(--err); font-style: italic; }
+.coverage { margin-top: 2px; }
+.period { margin: 0 0 8px; font-size: 0.9em; }
+.notices { padding: 0 20px; background: var(--panel); }
+.notices .warning ul { margin: 6px 0 0; padding-left: 18px; }
+.notices .warning summary { cursor: pointer; }
+.blocked { max-width: 640px; margin: 15vh auto; padding: 0 20px; }
 .toolbar { display: flex; gap: 8px; }
 .toolbar input { flex: 1; }
 .scroll { overflow-x: auto; }

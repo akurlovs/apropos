@@ -9,7 +9,7 @@ from typing import Any
 
 import anthropic
 
-from backend import db, prompts, tools
+from backend import checks, db, prompts, tools
 
 log = logging.getLogger("apropos.llm")
 
@@ -38,6 +38,7 @@ def policy_text() -> str:
 
 _CLAUSE_RE = re.compile(r"^(\d+\.\d+)\s", re.M)
 _HEADING_RE = re.compile(r"^##\s+(\d+)\.\s+(.+)$", re.M)
+_BLOCK_SPLIT = re.compile(r"^(?=## |\d+\.\d+\s)", re.M)
 
 
 def section_for(char_index: int, text: str | None = None) -> str:
@@ -52,20 +53,48 @@ def section_for(char_index: int, text: str | None = None) -> str:
     return best
 
 
+def policy_blocks() -> list[str]:
+    """The policy split so each clause is its own citable block (a table and the clause after it stay separate)."""
+    return [b for b in _BLOCK_SPLIT.split(policy_text()) if b]
+
+
+def _cited_section(block_index: int, text: str, blocks: list[str]) -> str:
+    return section_for(sum(len(b) for b in blocks[:block_index]), text)
+
+
+def render_answer(content: list[Any]) -> str:
+    """Join the text blocks, marking each cited passage with its clause, e.g. "... must be held. [§3.1]".
+
+    The markers come from the Citations API response, so they are system-produced like every other source.
+    """
+    text, blocks = policy_text(), policy_blocks()
+    parts = []
+    for block in content:
+        if block.type != "text":
+            continue
+        tags: list[str] = []
+        for c in getattr(block, "citations", None) or []:
+            tag = _cited_section(c.start_block_index, text, blocks).split()[0]
+            if tag.startswith("§") and tag not in tags:
+                tags.append(tag)
+        body = block.text.rstrip()
+        parts.append(f"{body} [{', '.join(tags)}]{block.text[len(body):]}" if tags else block.text)
+    return "".join(parts).strip()
+
+
 def extract_citations(content: list[Any]) -> list[dict]:
-    text = policy_text()
+    text, blocks = policy_text(), policy_blocks()
     out, seen = [], set()
     for block in content:
         for c in getattr(block, "citations", None) or []:
             quoted = (getattr(c, "cited_text", "") or "").strip()
-            start = getattr(c, "start_char_index", None)
+            start = c.start_block_index
             key = (start, quoted)
             if key in seen or not quoted:
                 continue
             seen.add(key)
-            out.append({"section": section_for(start or 0, text), "quoted_text": quoted,
-                        "document": db.POLICY_ID, "start_char_index": start,
-                        "end_char_index": getattr(c, "end_char_index", None)})
+            out.append({"section": _cited_section(start, text, blocks), "quoted_text": quoted,
+                        "document": db.POLICY_ID, "start_block_index": start})
     return out
 
 
@@ -73,12 +102,25 @@ def extract_citations(content: list[Any]) -> list[dict]:
 
 _SKIP_PATTERNS = [
     r"\b(?:INV|PO|V|CC-[A-Z]+)-\d+\b", r"\bCC-[A-Z]+-\d+\b", r"§\s?\d+(?:\.\d+)?", r"\b\d{4}-\d{2}-\d{2}\b",
-    r"\bQ[1-4]\b", r"\bFIN-POL-\d+\b", r"\bv\d+(?:\.\d+)?\b", r"\b20(?:24|25|26)\b", r"^\s*\d+\.\s",
-    r"\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b",
+    r"\b20\d{2}-\d{2}\b", r"\bQ[1-4]\b", r"\bFIN-POL-\d+\b", r"\bv\d+(?:\.\d+)?\b", r"\b20\d{2}\b", r"^\s*\d+\.\s",
+    r"(?<![\d,.])\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\b",
     r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2}\b",
 ]
 _NUM_RE = re.compile(r"(?<![\w.])[-−]?\d{1,3}(?:,\d{3})+(?:\.\d+)?|(?<![\w.])[-−]?\d+(?:\.\d+)?")
 _SCALE_RE = re.compile(r"\s*(k|m|bn|million|thousand|billion)\b", re.I)
+
+
+_SCALED_RANGE_RE = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)(?:\s*(?:-|–|to|and)\s*(\d+(?:\.\d+)?))?\s*"
+                              r"(k|m|bn|thousand|million|billion)\b", re.I)
+_SCALES = {"k": 1e3, "thousand": 1e3, "m": 1e6, "million": 1e6, "bn": 1e9, "billion": 1e9}
+
+
+def scaled_figures(text: str) -> list[float]:
+    """Amounts written as '60k' or '60-70k' (the suffix applies to both ends of a range)."""
+    out = []
+    for low, high, scale in _SCALED_RANGE_RE.findall(text):
+        out += [float(x) * _SCALES[scale.lower()] for x in (low, high) if x]
+    return out
 
 
 def _numbers_in(obj: Any, acc: set[float]) -> set[float]:
@@ -110,13 +152,30 @@ def _matches(n: float, decimals: int, known: set[float]) -> bool:
     return False
 
 
-def unverified_numbers(answer: str, tool_results: list[Any]) -> list[str]:
-    known = _numbers_in(tool_results, set())
+def _without_row_numbers(answer: str) -> str:
+    """Blank a table's 1, 2, 3... rank column: those are positions, not figures."""
+    lines, n = [], 0
+    for line in answer.split("\n"):
+        m = re.match(r"\s*\|\s*(\d+)\s*\|", line)
+        if m and int(m.group(1)) == n + 1:
+            n += 1
+            line = "| |" + line[m.end():]
+        elif not line.lstrip().startswith("|"):
+            n = 0
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def unverified_numbers(answer: str, sources: list[Any], tool_results: list[Any] | None = None) -> list[str]:
+    """sources: everything a figure may legitimately come from. tool_results: also countable row by row."""
+    known = _numbers_in(sources, set())
     _numbers_in(policy_text(), known)
-    text = answer
+    rows = tool_results if tool_results is not None else sources
+    known |= {float(n) for n in checks.allowed_counts(rows)} | checks.totals_across(rows)
+    text = _without_row_numbers(answer)
     for pat in _SKIP_PATTERNS:
         text = re.sub(pat, " ", text, flags=re.M)
-    bad = []
+    found, verified = [], []
     for m in _NUM_RE.finditer(text):
         raw = m.group()
         val = float(raw.replace(",", "").replace("−", "-"))
@@ -127,9 +186,14 @@ def unverified_numbers(answer: str, tool_results: list[Any]) -> list[str]:
             ok = _matches(val, decimals, {k / mult for k in known})
         else:
             ok = _matches(val, decimals, known)
-        if not ok:
-            bad.append(raw)
-    return sorted(set(bad))
+        if ok:
+            verified.append(val)
+        else:
+            found.append((raw, val, decimals))
+    if not found:
+        return []
+    derived = checks.arithmetic_of(verified)
+    return sorted({raw for raw, val, decimals in found if not _matches(val, decimals, derived)})
 
 
 # ---------------------------------------------------------------------------- loop
@@ -139,7 +203,7 @@ def _tool_param(spec: tools.ToolSpec) -> dict:
 
 
 def tool_params() -> list[dict]:
-    return [_tool_param(t) for t in tools.tool_specs()]
+    return [_tool_param(t) for t in tools.TOOLS_BY_NAME.values()]
 
 
 def _trim_history(messages: list[dict]) -> list[dict]:
@@ -168,7 +232,7 @@ def _build_messages(history: list[dict]) -> list[dict]:
     """Policy document goes first in the first user turn (stable prefix -> cached)."""
     doc = {
         "type": "document",
-        "source": {"type": "text", "media_type": "text/plain", "data": policy_text()},
+        "source": {"type": "content", "content": [{"type": "text", "text": b} for b in policy_blocks()]},
         "title": f"{db.POLICY_ID} Global Procurement & Spend Policy",
         "citations": {"enabled": True},
         "cache_control": {"type": "ephemeral"},
@@ -187,6 +251,7 @@ def failure(message: str, ctx: tools.ToolContext | None, **extra: Any) -> dict:
         "answer": message, "status": "error",
         "applied_settings": ctx.applied_settings() if ctx else None,
         "data_sources": [], "not_determinable": [], "policy_citations": [], "unverified_figures": [],
+        "answer_warnings": [], "workflow": [],
         **extra,
     }
 
@@ -200,6 +265,7 @@ def ask(messages: list[dict], settings: tools.Settings) -> dict:
     convo = _build_messages(history)
     system = [{"type": "text", "text": prompts.system_prompt(), "cache_control": {"type": "ephemeral"}}]
     tool_results_seen: list[Any] = []
+    tool_inputs: list[Any] = []
     tools_called: list[str] = []
     usage_total = {"input_tokens": 0, "output_tokens": 0, "cache_read_input_tokens": 0,
                    "cache_creation_input_tokens": 0}
@@ -234,18 +300,28 @@ def ask(messages: list[dict], settings: tools.Settings) -> dict:
         convo.append({"role": "assistant", "content": resp.content})  # append-only (keeps thinking blocks valid)
         tool_uses = [b for b in resp.content if b.type == "tool_use"]
         if resp.stop_reason != "tool_use" or not tool_uses:
-            answer = "".join(b.text for b in resp.content if b.type == "text").strip()
-            # A figure the user typed (e.g. "an invoice of EUR 60,000") may be repeated back.
-            unverified = unverified_numbers(answer, [*tool_results_seen, history[-1]["content"]])
+            answer = render_answer(resp.content)
+            # Besides tool results, these are legitimate sources: anything said earlier in the conversation
+            # ("an invoice of EUR 60,000", including as "60k") and the limits a search actually used.
+            conversation = [m["content"] for m in history]
+            scaled = [n for text in conversation for n in scaled_figures(text)]
+            unverified = unverified_numbers(answer, [*tool_results_seen, *tool_inputs, *conversation, scaled], tool_results_seen)
             if unverified:
-                log.warning("unverified figures in answer: %s", unverified)
+                log.warning("unverified figures %s; question: %r; answer: %r", unverified, history[-1]["content"], answer)
+            citations = extract_citations(resp.content)
+            warnings = checks.check_answer(answer, conversation, tool_results_seen, policy_text(),
+                                           tools_called, ctx.not_determinable, citations)
+            if warnings:
+                log.warning("answer checks: %s", [w["check"] for w in warnings])
             return {
                 "answer": answer, "status": "ok",
                 "applied_settings": ctx.applied_settings(),
                 "data_sources": ctx.data_sources,
                 "not_determinable": ctx.not_determinable,
-                "policy_citations": extract_citations(resp.content),
+                "policy_citations": citations,
                 "unverified_figures": unverified,
+                "answer_warnings": warnings,
+                "workflow": tools.finish_workflow(ctx, citations),
                 "tools_called": tools_called,
                 "model": resp.model, "usage": usage_total,
             }
@@ -253,6 +329,8 @@ def ask(messages: list[dict], settings: tools.Settings) -> dict:
         results = []
         for tu in tool_uses:
             tools_called.append(tu.name)
+            # The stated reason is the model's own text, so it can't vouch for a figure.
+            tool_inputs.append({k: v for k, v in (tu.input or {}).items() if k != "policy_basis"})
             try:
                 out = tools.call_tool(ctx, tu.name, dict(tu.input or {}))
                 tool_results_seen.append(out)

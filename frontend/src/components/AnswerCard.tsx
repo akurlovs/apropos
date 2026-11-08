@@ -13,6 +13,7 @@ export function AnswerCard({ r }: { r: AskResponse }) {
              title={a.source === "question" ? "Overridden by your question for this answer only" : "From the settings bar"}>
           {a.report_currency === "EUR" ? "EUR" : "Original currency"} ·{" "}
           {a.approval_scope === "all" ? "All invoices" : "Approved only"} ·{" "}
+          {a.period ? `${a.period} · ` : ""}
           {a.source === "question" ? "set by question" : "settings"}
         </div>
       )}
@@ -22,6 +23,9 @@ export function AnswerCard({ r }: { r: AskResponse }) {
           could not be traced to the invoice data or the policy. Treat with caution.
         </div>
       )}
+      {r.answer_warnings.map((w, i) => (
+        <div className="warning" key={i}>⚠ {w.message} {w.items.join(", ")}</div>
+      ))}
       <div className="md">
         <ReactMarkdown remarkPlugins={[remarkGfm]}>{r.answer}</ReactMarkdown>
       </div>
@@ -55,7 +59,7 @@ export function AnswerCard({ r }: { r: AskResponse }) {
           {sources.map((t) => <span className="chip src" key={t}>{t}</span>)}
         </div>
       )}
-      <Lineage sources={r.data_sources} />
+      <Lineage sources={r.data_sources} workflow={r.workflow} />
     </div>
   );
 }

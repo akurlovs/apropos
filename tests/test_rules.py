@@ -56,3 +56,8 @@ def test_approved_only_changes_spend():
     b = tools.spend_summary(tools.ToolContext(gui=tools.Settings(approval_scope="approved_only")))
     assert b["rows"][0]["invoice_count"] == 115 and b["excluded_by_scope"]["count"] == 25
     assert a["invoice_count"] == 140
+
+
+def test_maverick_always_splits_by_cost_center():
+    out = tools.maverick_spend(tools.ToolContext(), filters={"quarter": "2025-Q3"})
+    assert {g["cost_center"]: g["count"] for g in out["by_cost_center"]} == {"CC-COM-440": 2, "CC-FIN-100": 5}
